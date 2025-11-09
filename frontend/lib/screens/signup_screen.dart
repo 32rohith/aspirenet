@@ -96,6 +96,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
       return 'Password must be at least 8 characters long.';
     }
 
+    // Check for password strength (at least one uppercase, lowercase, and number)
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasNumber = password.contains(RegExp(r'[0-9]'));
+
+    if (!hasUppercase || !hasLowercase || !hasNumber) {
+      return 'Password must contain at least one uppercase letter, one lowercase letter, and one number.';
+    }
+
     if (password != confirmPassword) {
       return 'Passwords do not match.';
     }
@@ -143,7 +152,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
           ),
         );
       } else {
-        _showError(result.error!.getUserFriendlyMessage());
+        // Check if signup was successful but login failed due to email verification
+        if (result.error?.code == 'email_verification_required' || 
+            result.error?.code == 'signup_success_login_pending' ||
+            result.error?.code == 'signup_success_login_required') {
+          _showSuccess(result.error!.getUserFriendlyMessage());
+          // Wait a moment then navigate back to login
+          await Future.delayed(const Duration(seconds: 3));
+          if (mounted) {
+            Navigator.pop(context);
+          }
+        } else {
+          _showError(result.error!.getUserFriendlyMessage());
+        }
       }
     } catch (e) {
       if (mounted) {

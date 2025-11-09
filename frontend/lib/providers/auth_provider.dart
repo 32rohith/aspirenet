@@ -144,7 +144,7 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     _clearError();
 
-    final result = await _authService.resetPassword(email);
+    final result = await _authService.resetPassword(email: email);
 
     if (!result.isSuccess) {
       _setError(result.error!);

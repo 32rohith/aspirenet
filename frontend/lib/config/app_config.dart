@@ -5,7 +5,7 @@ class AppConfig {
   
   // Auth0 Configuration
   // TODO: Replace these with your actual Auth0 credentials
-  static const String auth0Domain = 'dev-bt6psmdagwduake7.us.auth0.com'; // e.g., 'dev-xxxxx.us.auth0.com'
+  static const String auth0Domain = 'dev-4fw8d54yrctcnh0m.us.auth0.com'; // e.g., 'dev-xxxxx.us.auth0.com'
   static const String auth0ClientId = 'yMEPXUr5NCQxRuLvP2fjJfeKQ8PgjYQY';
   static const String auth0Audience = 'https://aspirenet-api'; // Optional, use if you have a custom API
   

@@ -30,8 +30,8 @@ android {
         versionName = flutter.versionName
         manifestPlaceholders.putAll(
             mapOf(
-                "auth0Domain" to "dev-bt6psmdagwduake7.us.auth0.com",
-                "auth0Scheme" to "https"
+                "auth0Domain" to "dev-4fw8d54yrctcnh0m.us.auth0.com",
+                "auth0Scheme" to "com.aspirenet.app"
             )
         )
     }

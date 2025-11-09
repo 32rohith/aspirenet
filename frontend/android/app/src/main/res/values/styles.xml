@@ -15,4 +15,7 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+    <string name="com_auth0_domain">dev-4fw8d54yrctcnh0m.us.auth0.com</string>
+    <string name="com_auth0_client_id">yMEPXUr5NCQxRuLvP2fjJfeKQ8PgjYQY</string>
+    <string name="com_auth0_scheme">https</string>
 </resources>

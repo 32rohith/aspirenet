@@ -2,49 +2,63 @@ import 'package:auth0_flutter/auth0_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/app_config.dart';
 import '../models/auth_models.dart';
-import 'api_client.dart';
 
 /// Authentication Service with Auth0 integration
+/// Uses Universal Login - the ONLY officially supported method for mobile apps
 class AuthService {
   late final Auth0 _auth0;
   final FlutterSecureStorage _secureStorage;
-  final ApiClient _apiClient;
 
   AuthService({
     FlutterSecureStorage? secureStorage,
-    ApiClient? apiClient,
-  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-        _apiClient = apiClient ?? ApiClient() {
+  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage() {
     _auth0 = Auth0(AppConfig.auth0Domain, AppConfig.auth0ClientId);
   }
 
-  /// Login with email and password using Auth0
+  /// Login with email and password using Auth0 Universal Login
+  /// Opens Auth0's secure login page (required for mobile apps per Auth0 docs)
   Future<AuthResult<AuthResponse>> loginWithEmailPassword({
     required String email,
     required String password,
   }) async {
     try {
-      // Validate input
-      final validationError = _validateEmailPassword(email, password);
-      if (validationError != null) {
-        return AuthResult.failure(validationError);
-      }
+      print('============ Auth0 Universal Login ============');
+      print('Domain: ${AppConfig.auth0Domain}');
+      print('Client ID: ${AppConfig.auth0ClientId}');
+      print('Pre-filling email: $email');
+      print('Using Universal Login (Auth0 required method for mobile)');
+      print('================================================');
+      
+      // Universal Login - Auth0's ONLY supported method for mobile apps
+      // This opens a secure browser view with Auth0's login page
+      final credentials = await _auth0
+          .webAuthentication(scheme: 'https')
+          .login(
+            parameters: {
+              'login_hint': email, // Pre-fills the email field
+            },
+            audience: AppConfig.auth0Audience,
+            scopes: {'openid', 'profile', 'email', 'offline_access'},
+          );
 
-      // Authenticate with Auth0
-      final credentials = await _auth0.api.login(
-        usernameOrEmail: email,
-        password: password,
-        connectionOrRealm: 'Username-Password-Authentication',
-      );
-
+      print('✅ Login successful!');
+      print('User ID: ${credentials.user.sub}');
+      print('Access Token received: ${credentials.accessToken.substring(0, 20)}...');
+      
       // Store tokens and create auth response
       final authResponse = await _handleSuccessfulAuth(credentials);
       return AuthResult.success(authResponse);
-    } on ApiException catch (e) {
-      return AuthResult.failure(
-        _handleAuth0Error(e),
-      );
-    } catch (e) {
+    } on WebAuthenticationException catch (e) {
+      print('============ Auth0 Login Error ============');
+      print('Message: ${e.message}');
+      print('Code: ${e.code}');
+      print('Details: ${e.details}');
+      print('==========================================');
+      
+      return AuthResult.failure(_handleWebAuthError(e));
+    } catch (e, stackTrace) {
+      print('Login Error: $e');
+      print('Stack Trace: $stackTrace');
       return AuthResult.failure(
         AuthError(
           message: 'Login failed. Please try again.',
@@ -54,7 +68,8 @@ class AuthService {
     }
   }
 
-  /// Sign up with email and password using Auth0
+  /// Sign up with email and password using Auth0 Universal Login
+  /// Opens Auth0's secure signup page (required for mobile apps per Auth0 docs)
   Future<AuthResult<AuthResponse>> signupWithEmailPassword({
     required String email,
     required String password,
@@ -62,38 +77,43 @@ class AuthService {
     required String name,
   }) async {
     try {
-      // Validate input
-      final validationError = _validateSignup(email, password, username, name);
-      if (validationError != null) {
-        return AuthResult.failure(validationError);
-      }
+      print('============ Auth0 Universal Signup ============');
+      print('Domain: ${AppConfig.auth0Domain}');
+      print('Client ID: ${AppConfig.auth0ClientId}');
+      print('Pre-filling email: $email');
+      print('Using Universal Login with signup screen');
+      print('===============================================');
+      
+      // Universal Login with signup screen - Auth0's ONLY supported method
+      // This opens a secure browser view with Auth0's signup page
+      final credentials = await _auth0
+          .webAuthentication(scheme: 'https')
+          .login(
+            parameters: {
+              'screen_hint': 'signup', // Shows signup form instead of login
+              'login_hint': email, // Pre-fills the email field
+            },
+            audience: AppConfig.auth0Audience,
+            scopes: {'openid', 'profile', 'email', 'offline_access'},
+          );
 
-      // Sign up with Auth0
-      await _auth0.api.signup(
-        email: email,
-        password: password,
-        connection: 'Username-Password-Authentication',
-        userMetadata: {
-          'username': username,
-          'name': name,
-        },
-      );
-
-      // After signup, log the user in to get credentials
-      final credentials = await _auth0.api.login(
-        usernameOrEmail: email,
-        password: password,
-        connectionOrRealm: 'Username-Password-Authentication',
-      );
-
+      print('✅ Signup successful!');
+      print('User ID: ${credentials.user.sub}');
+      
       // Store tokens and create auth response
       final authResponse = await _handleSuccessfulAuth(credentials);
       return AuthResult.success(authResponse);
-    } on ApiException catch (e) {
-      return AuthResult.failure(
-        _handleAuth0Error(e),
-      );
-    } catch (e) {
+    } on WebAuthenticationException catch (e) {
+      print('============ Auth0 Signup Error ============');
+      print('Message: ${e.message}');
+      print('Code: ${e.code}');
+      print('Details: ${e.details}');
+      print('==========================================');
+      
+      return AuthResult.failure(_handleWebAuthError(e));
+    } catch (e, stackTrace) {
+      print('Signup Error: $e');
+      print('Stack Trace: $stackTrace');
       return AuthResult.failure(
         AuthError(
           message: 'Sign up failed. Please try again.',
@@ -105,48 +125,55 @@ class AuthService {
 
   /// Login with Google using Auth0
   Future<AuthResult<AuthResponse>> loginWithGoogle() async {
+    print('============ Auth0 Google Login ============');
+    print('Provider: google-oauth2');
+    print('===========================================');
     return _loginWithSocialProvider(AppConfig.googleConnection);
   }
 
   /// Login with Apple using Auth0
   Future<AuthResult<AuthResponse>> loginWithApple() async {
+    print('============ Auth0 Apple Login ============');
+    print('Provider: apple');
+    print('==========================================');
     return _loginWithSocialProvider(AppConfig.appleConnection);
   }
 
   /// Login with Facebook using Auth0
   Future<AuthResult<AuthResponse>> loginWithFacebook() async {
+    print('============ Auth0 Facebook Login ============');
+    print('Provider: facebook');
+    print('=============================================');
     return _loginWithSocialProvider(AppConfig.facebookConnection);
   }
 
-  /// Generic social provider login
+  /// Generic social provider login using Universal Login
   Future<AuthResult<AuthResponse>> _loginWithSocialProvider(
     String connection,
   ) async {
     try {
-      final credentials = await _auth0.webAuthentication().login(
+      final credentials = await _auth0
+          .webAuthentication(scheme: 'https')
+          .login(
             parameters: {
               'connection': connection,
             },
+            audience: AppConfig.auth0Audience,
+            scopes: {'openid', 'profile', 'email', 'offline_access'},
           );
 
+      print('✅ Social login successful!');
+      print('User ID: ${credentials.user.sub}');
+      
       final authResponse = await _handleSuccessfulAuth(credentials);
       return AuthResult.success(authResponse);
     } on WebAuthenticationException catch (e) {
-      if (e.code == 'a0.session.user_cancelled') {
-        return AuthResult.failure(
-          AuthError(
-            message: 'Login cancelled by user.',
-            code: 'cancelled',
-          ),
-        );
-      }
-      return AuthResult.failure(
-        AuthError(
-          message: 'Social login failed. Please try again.',
-          code: 'social_login_error',
-        ),
-      );
+      print('Auth0 Social Login Error: ${e.message}');
+      print('Auth0 Error Code: ${e.code}');
+      
+      return AuthResult.failure(_handleWebAuthError(e));
     } catch (e) {
+      print('Social Login Error: $e');
       return AuthResult.failure(
         AuthError(
           message: 'Social login failed. Please try again.',
@@ -160,53 +187,152 @@ class AuthService {
   Future<AuthResponse> _handleSuccessfulAuth(Credentials credentials) async {
     // Store tokens securely
     await _secureStorage.write(
-      key: AppConfig.accessTokenKey,
+      key: 'auth0_access_token',
       value: credentials.accessToken,
     );
 
-    if (credentials.refreshToken != null) {
-      await _secureStorage.write(
-        key: AppConfig.refreshTokenKey,
-        value: credentials.refreshToken,
-      );
-    }
+    await _secureStorage.write(
+      key: 'auth0_refresh_token',
+      value: credentials.refreshToken,
+    );
 
-    // Extract user info from ID token or user info
-    final userId = credentials.user.sub;
-    final email = credentials.user.email ?? '';
-    final name = credentials.user.name;
+    await _secureStorage.write(
+      key: 'auth0_id_token',
+      value: credentials.idToken,
+    );
 
-    await _secureStorage.write(key: AppConfig.userIdKey, value: userId);
-    await _secureStorage.write(key: AppConfig.userEmailKey, value: email);
+    // Store user info
+    await _secureStorage.write(
+      key: 'auth0_user_id',
+      value: credentials.user.sub,
+    );
 
-    // Create auth response
+    // Store user email
+    await _secureStorage.write(
+      key: 'auth0_user_email',
+      value: credentials.user.email ?? '',
+    );
+
+    // Store user name
+    await _secureStorage.write(
+      key: 'auth0_user_name',
+      value: credentials.user.name ?? '',
+    );
+
+    // Create AuthResponse from credentials
     return AuthResponse(
       accessToken: credentials.accessToken,
       refreshToken: credentials.refreshToken,
-      userId: userId,
-      email: email,
-      name: name,
+      userId: credentials.user.sub,
+      email: credentials.user.email ?? '',
+      name: credentials.user.name,
       expiresAt: credentials.expiresAt,
     );
   }
 
-  /// Logout user
+  /// Handle WebAuthenticationException errors
+  AuthError _handleWebAuthError(WebAuthenticationException exception) {
+    final message = exception.message.toLowerCase();
+    final code = exception.code;
+
+    // User cancelled authentication
+    if (code == 'a0.session.user_cancelled' || 
+        code == 'user_cancelled' ||
+        message.contains('cancel')) {
+      return AuthError(
+        message: 'Login cancelled.',
+        code: 'cancelled',
+      );
+    }
+
+    // Network errors
+    if (message.contains('network') || 
+        message.contains('connection') ||
+        message.contains('timeout')) {
+      return AuthError(
+        message: 'Network error. Please check your internet connection.',
+        code: 'network_error',
+      );
+    }
+
+    // Configuration errors
+    if (message.contains('not found') || 
+        message.contains('callback') ||
+        message.contains('redirect')) {
+      return AuthError(
+        message: 'Authentication configuration error.\n\n'
+                'Please check:\n'
+                '1. Callback URLs are configured in Auth0\n'
+                '2. Application is properly set up\n\n'
+                'See AUTH0_SETUP_COMPLETE.md for details.',
+        code: 'config_error',
+      );
+    }
+
+    // Invalid credentials
+    if (message.contains('invalid') || 
+        message.contains('unauthorized') ||
+        message.contains('wrong')) {
+      return AuthError(
+        message: 'Invalid credentials. Please try again.',
+        code: 'invalid_credentials',
+      );
+    }
+
+    // Access denied
+    if (message.contains('access') && message.contains('denied')) {
+      return AuthError(
+        message: 'Access denied. Please check your permissions.',
+        code: 'access_denied',
+      );
+    }
+
+    // Default error
+    return AuthError(
+      message: exception.message,
+      code: code,
+    );
+  }
+
+  /// Logout from Auth0 and clear local tokens
   Future<AuthResult<void>> logout() async {
     try {
+      print('============ Auth0 Logout ============');
+      
       // Logout from Auth0
-      await _auth0.webAuthentication().logout();
+      await _auth0.webAuthentication(scheme: 'https').logout();
 
-      // Clear stored tokens
-      await _secureStorage.delete(key: AppConfig.accessTokenKey);
-      await _secureStorage.delete(key: AppConfig.refreshTokenKey);
-      await _secureStorage.delete(key: AppConfig.userIdKey);
-      await _secureStorage.delete(key: AppConfig.userEmailKey);
+      // Clear stored tokens and user info
+      await _secureStorage.delete(key: 'auth0_access_token');
+      await _secureStorage.delete(key: 'auth0_refresh_token');
+      await _secureStorage.delete(key: 'auth0_id_token');
+      await _secureStorage.delete(key: 'auth0_user_id');
+      await _secureStorage.delete(key: 'auth0_user_email');
+      await _secureStorage.delete(key: 'auth0_user_name');
 
+      print('✅ Logout successful!');
       return AuthResult.success(null);
-    } catch (e) {
+    } on WebAuthenticationException catch (e) {
+      print('Logout Error: ${e.message}');
+      
+      // Even if web logout fails, clear local tokens
+      await _secureStorage.deleteAll();
+      
       return AuthResult.failure(
         AuthError(
-          message: 'Logout failed. Please try again.',
+          message: 'Logout completed with warnings.',
+          code: 'logout_warning',
+        ),
+      );
+    } catch (e) {
+      print('Logout Error: $e');
+      
+      // Clear local tokens anyway
+      await _secureStorage.deleteAll();
+      
+      return AuthResult.failure(
+        AuthError(
+          message: 'Logout failed but local session cleared.',
           code: 'logout_error',
         ),
       );
@@ -215,185 +341,141 @@ class AuthService {
 
   /// Check if user is authenticated
   Future<bool> isAuthenticated() async {
-    final accessToken = await _secureStorage.read(key: AppConfig.accessTokenKey);
-    if (accessToken == null || accessToken.isEmpty) {
-      return false;
-    }
-
-    // Verify token with backend
-    final result = await _apiClient.verifyToken(accessToken);
-    return result.isSuccess;
+    final accessToken = await _secureStorage.read(key: 'auth0_access_token');
+    return accessToken != null && accessToken.isNotEmpty;
   }
 
   /// Get stored access token
   Future<String?> getAccessToken() async {
-    return await _secureStorage.read(key: AppConfig.accessTokenKey);
+    return await _secureStorage.read(key: 'auth0_access_token');
   }
 
-  /// Get current user information
+  /// Get stored user ID
+  Future<String?> getUserId() async {
+    return await _secureStorage.read(key: 'auth0_user_id');
+  }
+
+  /// Get current user information from stored tokens
   Future<AuthResult<AuthUser>> getCurrentUser() async {
-    final accessToken = await getAccessToken();
-    if (accessToken == null) {
+    try {
+      final userId = await getUserId();
+      final email = await _secureStorage.read(key: 'auth0_user_email');
+      final name = await _secureStorage.read(key: 'auth0_user_name');
+
+      if (userId == null || email == null) {
+        return AuthResult.failure(
+          AuthError(
+            message: 'Not authenticated',
+            code: 'not_authenticated',
+          ),
+        );
+      }
+
+      final user = AuthUser(
+        id: userId,
+        email: email,
+        name: name,
+      );
+
+      return AuthResult.success(user);
+    } catch (e) {
+      print('Get User Error: $e');
       return AuthResult.failure(
         AuthError(
-          message: 'No authenticated user found.',
-          code: 'not_authenticated',
+          message: 'Failed to get user information.',
+          code: 'get_user_error',
         ),
       );
     }
-
-    return await _apiClient.getUserInfo(accessToken);
   }
 
-  /// Reset password (forgot password)
-  Future<AuthResult<void>> resetPassword(String email) async {
+  /// Refresh access token using refresh token
+  Future<AuthResult<String>> refreshAccessToken() async {
     try {
-      final validationError = _validateEmail(email);
-      if (validationError != null) {
-        return AuthResult.failure(validationError);
+      final refreshToken = await _secureStorage.read(key: 'auth0_refresh_token');
+      
+      if (refreshToken == null) {
+        return AuthResult.failure(
+          AuthError(
+            message: 'No refresh token available.',
+            code: 'no_refresh_token',
+          ),
+        );
       }
+
+      // Renew credentials using refresh token
+      final credentials = await _auth0.api.renewCredentials(
+        refreshToken: refreshToken,
+      );
+
+      // Store new tokens
+      await _secureStorage.write(
+        key: 'auth0_access_token',
+        value: credentials.accessToken,
+      );
+
+      await _secureStorage.write(
+        key: 'auth0_id_token',
+        value: credentials.idToken,
+      );
+
+      print('✅ Token refreshed successfully!');
+      return AuthResult.success(credentials.accessToken);
+    } catch (e) {
+      print('Refresh Token Error: $e');
+      return AuthResult.failure(
+        AuthError(
+          message: 'Failed to refresh token. Please log in again.',
+          code: 'refresh_error',
+        ),
+      );
+    }
+  }
+
+  /// Reset password using Auth0
+  Future<AuthResult<void>> resetPassword({required String email}) async {
+    try {
+      print('============ Auth0 Password Reset ============');
+      print('Email: $email');
+      print('Connection: Username-Password-Authentication');
+      print('==============================================');
 
       await _auth0.api.resetPassword(
         email: email,
         connection: 'Username-Password-Authentication',
       );
 
+      print('✅ Password reset email sent!');
       return AuthResult.success(null);
     } on ApiException catch (e) {
-      return AuthResult.failure(
-        _handleAuth0Error(e),
-      );
-    } catch (e) {
+      print('Password Reset Error: ${e.message}');
+      
+      final errorMsg = e.message.toLowerCase();
+      
+      if (errorMsg.contains('not found') || errorMsg.contains('user')) {
+        return AuthResult.failure(
+          AuthError(
+            message: 'No account found with this email address.',
+            code: 'user_not_found',
+          ),
+        );
+      }
+      
       return AuthResult.failure(
         AuthError(
-          message: 'Password reset failed. Please try again.',
-          code: 'reset_password_error',
+          message: e.message,
+          code: 'reset_error',
+          statusCode: e.statusCode,
+        ),
+      );
+    } catch (e) {
+      print('Password Reset Error: $e');
+      return AuthResult.failure(
+        AuthError(
+          message: 'Failed to send password reset email.',
+          code: 'reset_error',
         ),
       );
     }
   }
-
-  /// Validate email format
-  AuthError? _validateEmail(String email) {
-    if (email.isEmpty) {
-      return AuthError(
-        message: 'Email cannot be empty.',
-        code: 'invalid_email',
-      );
-    }
-
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-
-    if (!emailRegex.hasMatch(email)) {
-      return AuthError(
-        message: 'Please enter a valid email address.',
-        code: 'invalid_email',
-      );
-    }
-
-    return null;
-  }
-
-  /// Validate email and password
-  AuthError? _validateEmailPassword(String email, String password) {
-    final emailError = _validateEmail(email);
-    if (emailError != null) {
-      return emailError;
-    }
-
-    if (password.isEmpty) {
-      return AuthError(
-        message: 'Password cannot be empty.',
-        code: 'invalid_password',
-      );
-    }
-
-    return null;
-  }
-
-  /// Validate signup information
-  AuthError? _validateSignup(
-    String email,
-    String password,
-    String username,
-    String name,
-  ) {
-    final emailPasswordError = _validateEmailPassword(email, password);
-    if (emailPasswordError != null) {
-      return emailPasswordError;
-    }
-
-    if (username.isEmpty) {
-      return AuthError(
-        message: 'Username cannot be empty.',
-        code: 'invalid_username',
-      );
-    }
-
-    if (username.length < 3) {
-      return AuthError(
-        message: 'Username must be at least 3 characters long.',
-        code: 'invalid_username',
-      );
-    }
-
-    if (name.isEmpty) {
-      return AuthError(
-        message: 'Name cannot be empty.',
-        code: 'invalid_name',
-      );
-    }
-
-    if (password.length < 8) {
-      return AuthError(
-        message: 'Password must be at least 8 characters long.',
-        code: 'password_too_weak',
-      );
-    }
-
-    return null;
-  }
-
-  /// Handle Auth0 API exceptions
-  AuthError _handleAuth0Error(ApiException exception) {
-    final message = exception.message;
-    final code = exception.statusCode.toString();
-
-    // Map common Auth0 errors to user-friendly messages
-    if (message.toLowerCase().contains('invalid') ||
-        message.toLowerCase().contains('credentials')) {
-      return AuthError(
-        message: 'Invalid credentials. Please check your email and password.',
-        code: 'invalid_credentials',
-        statusCode: exception.statusCode,
-      );
-    } else if (message.toLowerCase().contains('exist')) {
-      return AuthError(
-        message: 'An account with this email already exists.',
-        code: 'user_exists',
-        statusCode: exception.statusCode,
-      );
-    } else if (message.toLowerCase().contains('password')) {
-      return AuthError(
-        message: 'Password does not meet requirements. Use at least 8 characters.',
-        code: 'password_too_weak',
-        statusCode: exception.statusCode,
-      );
-    } else if (message.toLowerCase().contains('network')) {
-      return AuthError(
-        message: 'Network error. Please check your connection.',
-        code: 'network_error',
-        statusCode: exception.statusCode,
-      );
-    }
-
-    return AuthError(
-      message: message,
-      code: code,
-      statusCode: exception.statusCode,
-    );
-  }
 }
-

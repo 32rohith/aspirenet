@@ -148,6 +148,17 @@ class AuthError {
   String getUserFriendlyMessage() {
     if (code != null) {
       switch (code) {
+        case 'email_not_verified':
+        case 'email_verification_required':
+          return 'Please verify your email address before logging in. Check your inbox for a verification link.';
+        case 'signup_success_login_pending':
+        case 'signup_success_login_required':
+          return 'Account created successfully! Please check your email and verify your account before logging in.';
+        case 'password_grant_not_enabled':
+        case 'password_realm_not_enabled':
+          return 'Password authentication is not enabled. Please enable "Password" grant type in your Auth0 Application settings.';
+        case 'login_failed':
+          return 'Login failed. If you just created your account, please verify your email first. Otherwise, check your credentials.';
         case 'invalid_grant':
         case 'invalid_credentials':
           return 'Invalid email or password. Please check your credentials and try again.';
@@ -166,7 +177,7 @@ class AuthError {
         case 'too_many_attempts':
           return 'Too many login attempts. Please try again after some time.';
         case 'password_too_weak':
-          return 'Password is too weak. Please use a stronger password with at least 8 characters.';
+          return 'Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, and numbers.';
         case 'invalid_email':
           return 'Please enter a valid email address.';
         default:
